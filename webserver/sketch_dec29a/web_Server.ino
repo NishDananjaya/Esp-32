@@ -1,31 +1,39 @@
 //Load WiFi library
 #include <WiFi.h>
 
-const char* ssid = "Nish_DRouter";
-const char* password = "Nishan622";
+//Configure WiFi credentials
+const char* ssid = "ENTER YOUR WIFI SSID";
+const char* password = "ENTER YOUR WIFI PASSWORD";
 
+//Create a server on port 80
 WiFiServer server(80);
 
+//Variable for storing HTTP header
 String header;
 
+//Track the GPIO states
 String output26state = "off";
 String output27state = "off";
 
 const int output26 = 26;
 const int output27 = 27;
 
+//Time tracking for client requests
 unsigned long currentTime = millis();
 unsigned long previousTime = 0;
 const long timeoutTime = 2000;
 
 void setup() {
     Serial.begin(115200);
+    //Initialize GPIO pins
     pinMode(26, OUTPUT);
     pinMode(27, OUTPUT);
 
+    //Set default LOW for both pins
     digitalWrite(26, LOW);
     digitalWrite(27, LOW);
 
+    //Connect to the specified WiFi
     Serial.println("Connecting to ");
     Serial.println(ssid);
     WiFi.begin(ssid, password);
@@ -34,14 +42,18 @@ void setup() {
         Serial.print(".");
     }
 
+    //Print connection details
     Serial.println("");
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+
+    //Start the server
     server.begin();
 }
 
 void loop() {
+    //Listen for incoming clients
     WiFiClient client = server.available();
 
     if (client) {
@@ -49,19 +61,25 @@ void loop() {
         previousTime = currentTime;
         Serial.println("New Client.");
         String currentLine = "";
+        //Stay in this loop while client is connected or until timeout
         while (client.connected() && currentTime - previousTime <= timeoutTime) {
             currentTime = millis();
             if (client.available()) {
                 char c = client.read();
                 Serial.write(c);
+                //Accumulate the HTTP request
                 header += c;
+
+                //If we have a newline, process
                 if (c == '\n') {
+                    //Header ends, send response
                     if (currentLine.length() == 0) {
                         client.println("HTTP/1.1 200 OK");
                         client.println("Content-type:text/html");
                         client.println("Connection: close");
                         client.println();
 
+                        //Check for GPIO control commands
                         if (header.indexOf("GET /26/on") >= 0) {
                             Serial.println("GPIO 26 on");
                             output26state = "on";
@@ -80,6 +98,7 @@ void loop() {
                             digitalWrite(27, LOW);
                         }
 
+                        //Send basic HTML with the current states
                         client.println("<!DOCTYPE html><html>");
                         client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
                         client.println("<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css\">");
@@ -96,25 +115,31 @@ void loop() {
                         client.println("<body>");
                         client.println("<h1>ESP32 Web Server</h1>");
                         client.println("<div class=\"container\">");
+                        //Show GPIO 26 state and control buttons
                         client.println("<div class=\"status\">GPIO 26 - State: " + output26state + "</div>");
                         client.println("<a href=\"/26/on\" class=\"button\">Turn ON</a>");
                         client.println("<a href=\"/26/off\" class=\"button off\">Turn OFF</a>");
+                        //Show GPIO 27 state and control buttons
                         client.println("<div class=\"status\">GPIO 27 - State: " + output27state + "</div>");
                         client.println("<a href=\"/27/on\" class=\"button\">Turn ON</a>");
                         client.println("<a href=\"/27/off\" class=\"button off\">Turn OFF</a>");
                         client.println("</div>");
                         client.println("</body></html>");
 
+                        //Close the HTTP response
                         client.println();
                         break;
                     } else {
+                        //Reset the current line
                         currentLine = "";
                     }
                 } else if (c != '\r') {
+                    //Add characters (except \r) to the current line
                     currentLine += c;
                 }
             }
         }
+        //Clear header and disconnect
         header = "";
         client.stop();
         Serial.println("Client disconnected.");
